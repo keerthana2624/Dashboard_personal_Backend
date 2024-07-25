@@ -1,3 +1,4 @@
+
 const express = require('express');
 const bodyParser = require('body-parser');
 const cors = require('cors');
@@ -9,6 +10,17 @@ require('dotenv').config(); // Import environment variables
 const app = express();
 const port = process.env.PORT || 5000; // Use PORT from environment variables
 
+// Set up middleware
+app.use(express.json());
+app.use(cors({
+  origin: 'http://localhost:3000', // Allow requests from this origin
+  methods: ['GET', 'POST', 'PUT', 'DELETE'],
+  allowedHeaders: ['Content-Type', 'Authorization']
+}));
+app.use(bodyParser.json());
+app.use('/images', express.static(path.join(__dirname, 'images')));
+
+
 const pool = new Pool({
   user: process.env.DB_USER,
   host: process.env.DB_HOST,
@@ -16,17 +28,6 @@ const pool = new Pool({
   password: process.env.DB_PASSWORD,
   port: process.env.DB_PORT,
 });
-
-// Configure CORS to allow requests from specific origins
-app.use(cors({
-  origin: 'http://localhost:3000', // Allow requests from this origin
-  methods: ['GET', 'POST', 'PUT', 'DELETE'],
-  allowedHeaders: ['Content-Type', 'Authorization']
-}));
-
-app.use(bodyParser.json());
-app.use('/images', express.static(path.join(__dirname, 'images')));
-
 app.post('/api/register', async (req, res) => {
   const { email, password } = req.body;
   try {
@@ -53,6 +54,20 @@ app.post('/api/login', async (req, res) => {
   }
 });
 
+app.post('/api/admin/login', async (req, res) => {
+  const { email, password } = req.body;
+  try {
+    const result = await pool.query('SELECT * FROM admins WHERE email = $1 AND password = $2', [email, password]);
+    if (result.rows.length > 0) {
+      res.json({ token: 'dummy-jwt-token', user: result.rows[0] });
+    } else {
+      res.status(401).json({ error: 'Invalid email or password' });
+    }
+  } catch (err) {
+    console.error('Error logging in:', err);
+    res.status(500).json({ error: 'Login failed. Please try again later.', details: err.message });
+  }
+});
 app.get('/api/courses', async (req, res) => {
   try {
     const result = await pool.query('SELECT * FROM courses');
@@ -75,8 +90,8 @@ app.post('/api/apply', async (req, res) => {
 
   try {
     await pool.query(
-      'INSERT INTO applications (course_id, personal_details, educational_background, statement_of_purpose, applicant_email, reference_number, submitted_at) VALUES ($1, $2, $3, $4, $5, $6, NOW())',
-      [courseId, personalDetails, educationalBackground, statementOfPurpose, applicantEmail, referenceNumber]
+      'INSERT INTO applications (course_id, personal_details, educational_background, statement_of_purpose, applicant_email, reference_number, submitted_at, status) VALUES ($1, $2, $3, $4, $5, $6, NOW(), $7)',
+      [courseId, personalDetails, educationalBackground, statementOfPurpose, applicantEmail, referenceNumber, 'pending']
     );
 
     // Send email confirmation
@@ -109,6 +124,59 @@ app.post('/api/apply', async (req, res) => {
   } catch (err) {
     console.error('Error submitting application:', err);
     res.status(500).json({ error: 'Failed to submit application. Please try again later.', details: err.message });
+  }
+});
+
+
+app.get('/api/admin/pending-applications', async (req, res) => {
+  try {
+    const result = await pool.query('SELECT * FROM applications WHERE status = $1', ['pending']);
+    res.json(result.rows);
+  } catch (err) {
+    console.error('Error fetching pending applications:', err);
+    res.status(500).json({ error: 'Failed to fetch pending applications. Please try again later.', details: err.message });
+  }
+});
+
+app.post('/api/admin/handle-application', async (req, res) => {
+  const { applicationId, applicantEmail, action } = req.body;
+  console.log(applicantEmail);
+  console.log(action,"------------")
+  const status = action === 'approve' ? 'approved' : 'rejected';
+  const subject = action === 'approve' ? 'Application Approved' : 'Application Rejected';
+  const text = action === 'approve' ? 'Congratulations! Your application has been approved.' : 'We regret to inform you that your application has been rejected.';
+
+  try {
+    await pool.query('UPDATE applications SET status = $1 WHERE id = $2', ['status', applicationId]);
+
+    const transporter = nodemailer.createTransport({
+      service: 'Gmail',
+      auth: {
+        user: "keerthanamummy2002@msitprogram.net",
+        pass: "Keerthi$@$058",
+      },
+    });
+
+    const mailOptions = {
+      from: "keerthanamummy2002@msitprogram.net",
+      to: applicantEmail,
+      subject,
+      text,
+    };
+
+    transporter.sendMail(mailOptions, (error, info) => {
+      if (error) {
+        console.error('Error sending approval email:', error);
+        res.status(500).json({ error: 'Failed to send approval email.', details: error.message });
+      } else {
+        console.log('Approval email sent:', info.response);
+        res.status(200).json({ message: 'Application approved and email sent.' });
+      }
+    });
+
+  } catch (err) {
+    console.error('Error approving application:', err);
+    res.status(500).json({ error: 'Failed to approve application. Please try again later.', details: err.message });
   }
 });
 
