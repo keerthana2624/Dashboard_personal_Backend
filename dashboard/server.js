@@ -7,7 +7,7 @@ const nodemailer = require('nodemailer');
 require('dotenv').config(); // Import environment variables
 
 const app = express();
-const port = 5000;
+const port = process.env.PORT || 5000; // Use PORT from environment variables
 
 const pool = new Pool({
   user: process.env.DB_USER,
@@ -19,7 +19,9 @@ const pool = new Pool({
 
 // Configure CORS to allow requests from specific origins
 app.use(cors({
-  origin: ['http://localhost:3005', 'http://localhost:3006'], // Add all relevant origins here
+  origin: 'http://localhost:3000', // Allow requests from this origin
+  methods: ['GET', 'POST', 'PUT', 'DELETE'],
+  allowedHeaders: ['Content-Type', 'Authorization']
 }));
 
 app.use(bodyParser.json());
@@ -76,13 +78,49 @@ app.post('/api/apply', async (req, res) => {
       'INSERT INTO applications (course_id, personal_details, educational_background, statement_of_purpose, applicant_email, reference_number, submitted_at) VALUES ($1, $2, $3, $4, $5, $6, NOW())',
       [courseId, personalDetails, educationalBackground, statementOfPurpose, applicantEmail, referenceNumber]
     );
-    
+
+    // Send email confirmation
+    const transporter = nodemailer.createTransport({
+      service: 'Gmail', // Replace with your email provider
+      auth: {
+        user: "keerthanamummy2002@msitprogram.net",
+        pass: "Keerthi$@$058",
+      },
+    });
+    // console.log(process.env.EMAIL_USER);
+    // console.log(process.env.EMAIL_PASS);
+    const mailOptions = {
+      from: "keerthanamummy2002@msitprogram.net",
+      to: applicantEmail,
+      subject: 'Application Confirmation',
+      text: `Thank you for your application! Your reference number is ${referenceNumber}.`,
+    };
+
+    transporter.sendMail(mailOptions, (error, info) => {
+      if (error) {
+        console.error('Error sending email:', error);
+        res.status(500).json({ error: 'Failed to send confirmation email.', details: error.message });
+      } else {
+        console.log('Email sent:', info.response);
+        res.status(200).json({ message: 'Application submitted and confirmation email sent.' });
+      }
+    });
+
   } catch (err) {
     console.error('Error submitting application:', err);
     res.status(500).json({ error: 'Failed to submit application. Please try again later.', details: err.message });
   }
 });
 
-app.listen(port, () => {
+const server = app.listen(port, () => {
   console.log(`Server running on port ${port}`);
+});
+
+server.on('error', (error) => {
+  if (error.code === 'EADDRINUSE') {
+    console.error(`Port ${port} is already in use. Please use a different port.`);
+    process.exit(1);
+  } else {
+    console.error('Server error:', error);
+  }
 });
