@@ -1,4 +1,5 @@
 
+
 const express = require('express');
 const bodyParser = require('body-parser');
 const cors = require('cors');
@@ -20,7 +21,6 @@ app.use(cors({
 app.use(bodyParser.json());
 app.use('/images', express.static(path.join(__dirname, 'images')));
 
-
 const pool = new Pool({
   user: process.env.DB_USER,
   host: process.env.DB_HOST,
@@ -28,6 +28,8 @@ const pool = new Pool({
   password: process.env.DB_PASSWORD,
   port: process.env.DB_PORT,
 });
+
+// Registration endpoint
 app.post('/api/register', async (req, res) => {
   const { email, password } = req.body;
   try {
@@ -39,6 +41,7 @@ app.post('/api/register', async (req, res) => {
   }
 });
 
+// Login endpoint
 app.post('/api/login', async (req, res) => {
   const { email, password } = req.body;
   try {
@@ -54,6 +57,7 @@ app.post('/api/login', async (req, res) => {
   }
 });
 
+// Admin login endpoint
 app.post('/api/admin/login', async (req, res) => {
   const { email, password } = req.body;
   try {
@@ -68,6 +72,8 @@ app.post('/api/admin/login', async (req, res) => {
     res.status(500).json({ error: 'Login failed. Please try again later.', details: err.message });
   }
 });
+
+// Fetch courses
 app.get('/api/courses', async (req, res) => {
   try {
     const result = await pool.query('SELECT * FROM courses');
@@ -78,6 +84,7 @@ app.get('/api/courses', async (req, res) => {
   }
 });
 
+// Submit application
 app.post('/api/apply', async (req, res) => {
   const { courseId, personalDetails, educationalBackground, statementOfPurpose, applicantEmail } = req.body;
   const referenceNumber = `REF${Math.floor(Math.random() * 1000000)}`;
@@ -96,14 +103,13 @@ app.post('/api/apply', async (req, res) => {
 
     // Send email confirmation
     const transporter = nodemailer.createTransport({
-      service: 'Gmail', // Replace with your email provider
+      service: 'Gmail',
       auth: {
         user: "keerthanamummy2002@msitprogram.net",
         pass: "Keerthi$@$058",
       },
     });
-    // console.log(process.env.EMAIL_USER);
-    // console.log(process.env.EMAIL_PASS);
+
     const mailOptions = {
       from: "keerthanamummy2002@msitprogram.net",
       to: applicantEmail,
@@ -127,7 +133,7 @@ app.post('/api/apply', async (req, res) => {
   }
 });
 
-
+// Fetch pending applications
 app.get('/api/admin/pending-applications', async (req, res) => {
   try {
     const result = await pool.query('SELECT * FROM applications WHERE status = $1', ['pending']);
@@ -138,20 +144,26 @@ app.get('/api/admin/pending-applications', async (req, res) => {
   }
 });
 
+// Fetch approved applications
+app.get('/api/admin/approved-applications', async (req, res) => {
+  try {
+    const result = await pool.query('SELECT * FROM applications WHERE status = $1', ['approved']);
+    res.json(result.rows);
+  } catch (err) {
+    console.error('Error fetching approved applications:', err);
+    res.status(500).json({ error: 'Failed to fetch approved applications. Please try again later.', details: err.message });
+  }
+});
+
+// Handle application (approve/reject)
 app.post('/api/admin/handle-application', async (req, res) => {
   const { applicationId, applicantEmail, action } = req.body;
-  console.log('Received data:', req.body); // Log the entire request body to debug
-  console.log('Email:', applicantEmail); // Log individual fields
-  console.log('Action:', action, '------------');
-  // console.log(applicantEmail);
-  // console.log(action,"------------")
   const status = action === 'approve' ? 'approved' : 'rejected';
   const subject = action === 'approve' ? 'Application Approved' : 'Application Rejected';
   const text = action === 'approve' ? 'Congratulations! Your application has been approved.' : 'We regret to inform you that your application has been rejected.';
 
-
   try {
-    await pool.query('UPDATE applications SET status = $1 WHERE id = $2', [action, applicationId]);
+    await pool.query('UPDATE applications SET status = $1 WHERE id = $2', [status, applicationId]);
 
     const transporter = nodemailer.createTransport({
       service: 'Gmail',
@@ -162,7 +174,7 @@ app.post('/api/admin/handle-application', async (req, res) => {
     });
 
     const mailOptions = {
-      from: "keerthanamummy2002@msitprogram.net",
+      from:"keerthanamummy2002@msitprogram.net",
       to: applicantEmail,
       subject,
       text,
@@ -174,16 +186,30 @@ app.post('/api/admin/handle-application', async (req, res) => {
         res.status(500).json({ error: 'Failed to send approval email.', details: error.message });
       } else {
         console.log('Approval email sent:', info.response);
-        res.status(200).json({ message: 'Application approved and email sent.' });
+        res.status(200).json({ message: 'Application status updated and email sent.' });
       }
     });
 
   } catch (err) {
-    console.error('Error approving application:', err);
-    res.status(500).json({ error: 'Failed to approve application. Please try again later.', details: err.message });
+    console.error('Error updating application status:', err);
+    res.status(500).json({ error: 'Failed to update application status. Please try again later.', details: err.message });
   }
 });
 
+
+// Fetch all applications for the dashboard
+app.get('/api/applications', async (req, res) => {
+  try {
+    // Fetch all applications or filter by status if needed
+    const result = await pool.query('SELECT * FROM applications'); // Adjust the query as needed
+    res.json(result.rows);
+  } catch (err) {
+    console.error('Error fetching applications:', err);
+    res.status(500).json({ error: 'Failed to fetch applications. Please try again later.', details: err.message });
+  }
+});
+
+// Start server
 const server = app.listen(port, () => {
   console.log(`Server running on port ${port}`);
 });
@@ -196,3 +222,5 @@ server.on('error', (error) => {
     console.error('Server error:', error);
   }
 });
+
+
