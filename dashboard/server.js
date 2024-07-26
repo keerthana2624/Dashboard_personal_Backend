@@ -11,12 +11,14 @@ require('dotenv').config(); // Import environment variables
 const app = express();
 const port = process.env.PORT || 5000; // Use PORT from environment variables
 
+
+
 // Set up middleware
 app.use(express.json());
 app.use(cors({
   origin: 'http://localhost:3000', // Allow requests from this origin
   methods: ['GET', 'POST', 'PUT', 'DELETE'],
-  allowedHeaders: ['Content-Type', 'Authorization']
+  allowedHeaders: ['Content-Type', 'Authorization','x-student-email']
 }));
 app.use(bodyParser.json());
 app.use('/images', express.static(path.join(__dirname, 'images')));
@@ -197,17 +199,26 @@ app.post('/api/admin/handle-application', async (req, res) => {
 });
 
 
-// Fetch all applications for the dashboard
+// Fetch applications for the logged-in student
 app.get('/api/applications', async (req, res) => {
+  const studentEmail = req.headers['x-student-email']; // Get the email from the request headers
+  console.log(studentEmail);
+
+  if (!studentEmail) {
+    return res.status(400).json({ error: 'Student email is required' });
+  }
+
   try {
-    // Fetch all applications or filter by status if needed
-    const result = await pool.query('SELECT * FROM applications'); // Adjust the query as needed
+    // Fetch applications for the specific student
+    const query = 'SELECT * FROM applications WHERE applicant_email = $1';
+    const result = await pool.query(query, [studentEmail]);
     res.json(result.rows);
   } catch (err) {
     console.error('Error fetching applications:', err);
     res.status(500).json({ error: 'Failed to fetch applications. Please try again later.', details: err.message });
   }
 });
+
 
 // Start server
 const server = app.listen(port, () => {
