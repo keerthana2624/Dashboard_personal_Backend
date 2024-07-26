@@ -199,6 +199,7 @@ app.post('/api/admin/handle-application', async (req, res) => {
 });
 
 
+
 // Fetch applications for the logged-in student
 app.get('/api/applications', async (req, res) => {
   const studentEmail = req.headers['x-student-email']; // Get the email from the request headers
