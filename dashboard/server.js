@@ -1,5 +1,4 @@
 
-
 const express = require('express');
 const bodyParser = require('body-parser');
 const cors = require('cors');
@@ -30,6 +29,33 @@ const pool = new Pool({
   password: process.env.DB_PASSWORD,
   port: process.env.DB_PORT,
 });
+
+
+// Helper function to send emails
+const sendEmail = async (to, subject, text) => {
+  const transporter = nodemailer.createTransport({
+    service: 'Gmail',
+    auth: {
+      user: "keerthanamummy2002@msitprogram.net",
+      pass: "Keerthi$@$058",
+    },
+  });
+
+  const mailOptions = {
+    from: "keerthanamummy2002@msitprogram.net",
+    to,
+    subject,
+    text,
+  };
+
+  try {
+    await transporter.sendMail(mailOptions);
+    console.log(`Email sent to ${to}`);
+  } catch (error) {
+    console.error('Error sending email:', error);
+    throw new Error('Failed to send email');
+  }
+};
 
 // Registration endpoint
 app.post('/api/register', async (req, res) => {
@@ -104,35 +130,44 @@ app.post('/api/apply', async (req, res) => {
     );
 
     // Send email confirmation
-    const transporter = nodemailer.createTransport({
-      service: 'Gmail',
-      auth: {
-        user: "keerthanamummy2002@msitprogram.net",
-        pass: "Keerthi$@$058",
-      },
-    });
+//     const transporter = nodemailer.createTransport({
+//       service: 'Gmail',
+//       auth: {
+//         user: "keerthanamummy2002@msitprogram.net",
+//         pass: "Keerthi$@$058",
+//       },
+//     });
 
-    const mailOptions = {
-      from: "keerthanamummy2002@msitprogram.net",
-      to: applicantEmail,
-      subject: 'Application Confirmation',
-      text: `Thank you for your application! Your reference number is ${referenceNumber}.`,
-    };
+//     const mailOptions = {
+//       from: "keerthanamummy2002@msitprogram.net",
+//       to: applicantEmail,
+//       subject: 'Application Confirmation',
+//       text: `Thank you for your application! Your reference number is ${referenceNumber}.`,
+//     };
 
-    transporter.sendMail(mailOptions, (error, info) => {
-      if (error) {
-        console.error('Error sending email:', error);
-        res.status(500).json({ error: 'Failed to send confirmation email.', details: error.message });
-      } else {
-        console.log('Email sent:', info.response);
-        res.status(200).json({ message: 'Application submitted and confirmation email sent.' });
-      }
-    });
+//     transporter.sendMail(mailOptions, (error, info) => {
+//       if (error) {
+//         console.error('Error sending email:', error);
+//         res.status(500).json({ error: 'Failed to send confirmation email.', details: error.message });
+//       } else {
+//         console.log('Email sent:', info.response);
+//         res.status(200).json({ message: 'Application submitted and confirmation email sent.' });
+//       }
+//     });
 
-  } catch (err) {
-    console.error('Error submitting application:', err);
-    res.status(500).json({ error: 'Failed to submit application. Please try again later.', details: err.message });
-  }
+//   } catch (err) {
+//     console.error('Error submitting application:', err);
+//     res.status(500).json({ error: 'Failed to submit application. Please try again later.', details: err.message });
+//   }
+// });
+
+
+await sendEmail(applicantEmail, 'Application Confirmation', `Thank you for your application! Your reference number is ${referenceNumber}.`);
+res.status(200).json({ message: 'Application submitted and confirmation email sent.' });
+} catch (err) {
+console.error('Error submitting application:', err);
+res.status(500).json({ error: 'Failed to submit application. Please try again later.', details: err.message });
+}
 });
 
 // Fetch pending applications
@@ -167,50 +202,24 @@ app.post('/api/admin/handle-application', async (req, res) => {
   try {
     await pool.query('UPDATE applications SET status = $1 WHERE id = $2', [status, applicationId]);
 
-    const transporter = nodemailer.createTransport({
-      service: 'Gmail',
-      auth: {
-        user: "keerthanamummy2002@msitprogram.net",
-        pass: "Keerthi$@$058",
-      },
-    });
-
-    const mailOptions = {
-      from:"keerthanamummy2002@msitprogram.net",
-      to: applicantEmail,
-      subject,
-      text,
-    };
-
-    transporter.sendMail(mailOptions, (error, info) => {
-      if (error) {
-        console.error('Error sending approval email:', error);
-        res.status(500).json({ error: 'Failed to send approval email.', details: error.message });
-      } else {
-        console.log('Approval email sent:', info.response);
-        res.status(200).json({ message: 'Application status updated and email sent.' });
-      }
-    });
-
+    await sendEmail(applicantEmail, subject, text);
+    res.status(200).json({ message: 'Application status updated and email sent.' });
   } catch (err) {
     console.error('Error updating application status:', err);
     res.status(500).json({ error: 'Failed to update application status. Please try again later.', details: err.message });
   }
 });
 
-
-
 // Fetch applications for the logged-in student
 app.get('/api/applications', async (req, res) => {
   const studentEmail = req.headers['x-student-email']; // Get the email from the request headers
-  console.log(studentEmail);
+  console.log('Fetching applications for student:', studentEmail);
 
   if (!studentEmail) {
     return res.status(400).json({ error: 'Student email is required' });
   }
 
   try {
-    // Fetch applications for the specific student
     const query = 'SELECT * FROM applications WHERE applicant_email = $1';
     const result = await pool.query(query, [studentEmail]);
     res.json(result.rows);
@@ -219,6 +228,31 @@ app.get('/api/applications', async (req, res) => {
     res.status(500).json({ error: 'Failed to fetch applications. Please try again later.', details: err.message });
   }
 });
+
+
+// / Payment endpoint (simulated)
+app.post('/api/payment', async (req, res) => {
+  const { applicationId, paymentOption, cardNumber, expiryDate, cvv } = req.body;
+
+  // Basic validation (you might want to add more)
+  if (!applicationId || !paymentOption || !cardNumber || !expiryDate || !cvv) {
+    return res.status(400).json({ error: 'All payment details are required.' });
+  }
+
+  try {
+    // Here, you would integrate with a real payment gateway
+    console.log(`Processing payment for application ${applicationId}`);
+    console.log(`Payment Option: ${paymentOption}`);
+    console.log(`Card Details: ${cardNumber}, ${expiryDate}, ${cvv}`);
+
+    // Simulate successful payment
+    res.status(200).json({ message: 'Payment processed successfully!' });
+  } catch (err) {
+    console.error('Error processing payment:', err);
+    res.status(500).json({ error: 'Failed to process payment. Please try again later.', details: err.message });
+  }
+});
+
 
 
 // Start server
@@ -237,7 +271,5 @@ server.on('error', (error) => {
 
 
 // new updated code
-
-
 
 
