@@ -140,14 +140,18 @@ app.get('/api/admin/pending-applications', async (req, res) => {
 
 app.post('/api/admin/handle-application', async (req, res) => {
   const { applicationId, applicantEmail, action } = req.body;
-  console.log(applicantEmail);
-  console.log(action,"------------")
+  console.log('Received data:', req.body); // Log the entire request body to debug
+  console.log('Email:', applicantEmail); // Log individual fields
+  console.log('Action:', action, '------------');
+  // console.log(applicantEmail);
+  // console.log(action,"------------")
   const status = action === 'approve' ? 'approved' : 'rejected';
   const subject = action === 'approve' ? 'Application Approved' : 'Application Rejected';
   const text = action === 'approve' ? 'Congratulations! Your application has been approved.' : 'We regret to inform you that your application has been rejected.';
 
+
   try {
-    await pool.query('UPDATE applications SET status = $1 WHERE id = $2', ['status', applicationId]);
+    await pool.query('UPDATE applications SET status = $1 WHERE id = $2', [action, applicationId]);
 
     const transporter = nodemailer.createTransport({
       service: 'Gmail',
